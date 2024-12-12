@@ -61,15 +61,27 @@ class UserLogoutView(APIView):
 
 
 class BookViewSet(viewsets.ModelViewSet):
+    """
+    CRUD operations for the Book model.
+    Only admin users can create, update, or delete books.
+    All users can view books.
+    """
+
     queryset = Book.objects.all()
     serializer_class = BookSerializer
 
     def get_permissions(self):
+        """
+        Setting permission for Admins to create, update, or delete books.
+        """
         if self.action in ["create", "update", "destroy"]:
             return [IsAdminUser()]
         return [AllowAny()]
 
     def get_queryset(self):
+        """
+        Filtering books by passing search value (genre or author) in query parameters.
+        """
         queryset = Book.objects.all()
         genre = self.request.query_params.get("genre", None)
         author = self.request.query_params.get("author", None)
@@ -83,16 +95,29 @@ class BookViewSet(viewsets.ModelViewSet):
 
 
 class LoanViewSet(viewsets.ModelViewSet):
+    """
+    CRUD operations for the Loan model.
+    Users can borrow, return, and view their loaned books.
+    Overdue loans are handled in a dynamic manner.
+    """
+
     queryset = Loan.objects.all()
     serializer_class = LoanSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        """
+        Filtering loans that belong to the user.
+        """
         if self.action == "list":
             return Loan.objects.filter(user=self.request.user)
         return super().get_queryset()
 
     def perform_create(self, serializer):
+        """
+        Ensuring the book is available before creating a loan.
+        Updating the book's availability status to False.
+        """
         book = serializer.validated_data["book"]
 
         if not book.is_available:
@@ -108,12 +133,19 @@ class LoanViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
+        """
+        Updating the return date and setting the book's availability status to True.
+        """
         instance = serializer.save()
         if instance.return_date:
             instance.book.is_available = True
             instance.book.save()
 
     def retrieve_overdue(self, request):
+        """
+        Retrieving overdue loans of the user.
+        Overdue loans are if the book is not returned within 14 days of the start date.
+        """
         overdue_loans = Loan.objects.filter(
             user=request.user,
             return_date__isnull=True,
